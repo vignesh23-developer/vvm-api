@@ -1,0 +1,234 @@
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Get, Query, Res, Req } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBody, ApiQuery } from '@nestjs/swagger';
+import { LoginService } from './services/login.service';
+import { ApiStandardResponses } from '../../../common';
+import { LoginRequestDto, LoginResponseDto, MobileOtpLoginDto, VerifyOtpDto, RefreshTokenDto, SignOutDto, UpgradeJwtDto } from './dto';
+import { DeviceInfoDto } from './dto/device-info.dto';
+import { PublicTokenGuard } from '../guards/public-token.guard';
+import { AccessJwtGuard } from '../guards/access-jwt.guard';
+import { RefreshJwtGuard } from '../guards/refresh-jwt.guard';
+import type { Response, Request } from 'express';
+import { DeviceType } from '../../shared';
+
+@ApiTags('Auth')
+@Controller('login')
+export class LoginController {
+  constructor(private readonly loginService: LoginService) {}
+
+  @ApiOperation({ summary: 'User login with email/phone and password' })
+  @ApiBody({
+    type: LoginRequestDto,
+    description: 'User credentials',
+    examples: {
+      emailLogin: {
+        summary: 'Login with email',
+        value: {
+          email: 'user@example.com',
+          password: 'password123',
+          device: {
+            deviceType: 'web',
+            deviceId: 'web:session-123',
+            platform: 'web',
+            firebaseToken: 'fcm:AAAA....'
+          }
+        }
+      },
+      phoneLogin: {
+        summary: 'Login with phone number',
+        value: {
+          phoneNumber: '+919884562624',
+          password: 'password123',
+          device: {
+            deviceType: 'mobile',
+            deviceId: 'android:abcd-1234',
+            platform: 'android',
+            firebaseToken: 'fcm:BBBB....'
+          }
+        }
+      }
+    }
+  })
+  @ApiStandardResponses(LoginResponseDto, {
+    successStatus: 200,
+    includeAuth: false,
+    includeValidation: true
+  })
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  login(@Body() loginDto: LoginRequestDto): Promise<LoginResponseDto> {
+    return this.loginService.login(loginDto);
+  }
+
+  @ApiOperation({ summary: 'Send OTP to mobile number (login or registration)' })
+  @ApiBody({
+    type: MobileOtpLoginDto,
+    description: 'Sends OTP. If the number exists, OTP is for login; otherwise, it is for registration.',
+    examples: {
+      example1: {
+        summary: 'Send OTP for any phone number',
+        value: {
+          phoneNumber: '+919884562624',
+          otpTypes: ['whatsapp_otp', 'sms_otp']
+        }
+      }
+    }
+  })
+  @Post('send-otp')
+  @HttpCode(HttpStatus.OK)
+  sendOtp(@Body() mobileOtpDto: MobileOtpLoginDto): Promise<{ message: string, isExistingUser: boolean }> {
+    return this.loginService.sendLoginOtp(mobileOtpDto.phoneNumber, mobileOtpDto.otpTypes);
+  }
+
+  @ApiOperation({ summary: 'Verify OTP (auto-login or auto-register then login)' })
+  @ApiBody({
+    type: VerifyOtpDto,
+    description: 'If phone exists, logs in. If not, creates the user (requires registration data) and logs in, then captures device info.',
+    examples: {
+      existingUser: {
+        summary: 'Existing user login (mobile)',
+        value: {
+          phoneNumber: '+919884562624',
+          otp: '111111',
+          device: {
+            deviceType: 'mobile',
+            deviceId: 'android:abcd-1234',
+            platform: 'android',
+            firebaseToken: 'fcm:BBBB....'
+          }
+        }
+      },
+      newUser: {
+        summary: 'First-time user registration via OTP (then login)',
+        value: {
+          phoneNumber: '+919884562624',
+          otp: '111111',
+          user: {
+            email: 'dineshrightnow@gmail.com',
+            firstName: 'Dinesh',
+            lastName: 'Jaganmohan'
+          },
+          device: {
+            deviceType: 'mobile',
+            deviceId: 'android:abcd-1234',
+            platform: 'android',
+            firebaseToken: 'fcm:BBBB....'
+          }
+        }
+      }
+    }
+  })
+  @ApiStandardResponses(LoginResponseDto, {
+    successStatus: 200,
+    includeAuth: false,
+    includeValidation: true
+  })
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  verifyOtp(@Body() verifyOtpDto: VerifyOtpDto): Promise<LoginResponseDto> {
+    return this.loginService.verifyLoginOtp(verifyOtpDto);
+  }
+
+  @ApiOperation({ summary: 'Refresh JWT tokens' })
+  @ApiBody({
+    type: RefreshTokenDto,
+    description: 'Provide userId and optional deviceType to refresh tokens'
+  })
+  @ApiStandardResponses(LoginResponseDto, {
+    successStatus: 200,
+    includeAuth: false,
+    includeValidation: true
+  })
+  @UseGuards(RefreshJwtGuard)
+  @Post('refresh-token')
+  @HttpCode(HttpStatus.OK)
+  refreshToken(@Body() dto: RefreshTokenDto): Promise<LoginResponseDto> {
+    return this.loginService.refreshTokens(dto.userId, dto.deviceType);
+  }
+
+  @ApiOperation({ summary: 'Sign out user (invalidate session if applicable)' })
+  @ApiBody({
+    type: SignOutDto,
+    description: 'Provide userId to sign out'
+  })
+  @UseGuards(AccessJwtGuard)
+  @Post('sign-out')
+  @HttpCode(HttpStatus.OK)
+  signOut(@Body() dto: SignOutDto): Promise<{ message: string }> {
+    return this.loginService.signOut(dto.userId);
+  }
+
+  @ApiOperation({ summary: 'Upgrade to JWT from token-based auth' })
+  @ApiBody({
+    type: UpgradeJwtDto,
+    description: 'Issue JWT tokens for a token-authenticated user if rolesAllowed criteria is met'
+  })
+  @ApiStandardResponses(LoginResponseDto, {
+    successStatus: 200,
+    includeAuth: false,
+    includeValidation: true
+  })
+  @UseGuards(PublicTokenGuard)
+  @Post('upgrade-jwt')
+  @HttpCode(HttpStatus.OK)
+  upgradeJwt(@Body() dto: UpgradeJwtDto): Promise<LoginResponseDto> {
+    return this.loginService.upgradeJwtAuthByUserId(dto.userId, dto.rolesAllowed ?? ['USER'], dto.deviceType);
+  }
+
+  @ApiOperation({ summary: 'Initiate Google OAuth login' })
+  @ApiQuery({ name: 'deviceType', required: false, enum: DeviceType, description: 'Device type' })
+  @ApiQuery({ name: 'deviceId', required: false, type: String, description: 'Device identifier' })
+  @ApiQuery({ name: 'platform', required: false, type: String, description: 'Platform (web, ios, android)' })
+  @ApiQuery({ name: 'firebaseToken', required: false, type: String, description: 'Firebase FCM token' })
+  @ApiQuery({ name: 'referralCode', required: false, type: String, description: 'Referral code for new user registration' })
+  @Get('google')
+  async startGoogleAuth(
+    @Query('deviceType') deviceType?: DeviceType,
+    @Query('deviceId') deviceId?: string,
+    @Query('platform') platform?: string,
+    @Query('firebaseToken') firebaseToken?: string,
+    @Query('referralCode') referralCode?: string,
+    @Req() req?: Request
+  ): Promise<{ url: string }> {
+    const ipAddress = req?.ip || req?.socket?.remoteAddress || 'unknown';
+    const userAgent = req?.headers['user-agent'] || 'unknown';
+
+    const device: DeviceInfoDto = {
+      deviceType: deviceType || DeviceType.WEB,
+      deviceId,
+      platform,
+      firebaseToken
+    };
+
+    const url = await this.loginService.startGoogleAuth(ipAddress, userAgent, device, referralCode);
+    return { url: url as string };
+  }
+
+  @ApiOperation({ summary: 'Google OAuth callback handler' })
+  @ApiQuery({ name: 'code', required: true, type: String, description: 'OAuth authorization code from Google' })
+  @ApiQuery({ name: 'state', required: true, type: String, description: 'OAuth state parameter' })
+  @Get('google/callback')
+  async googleCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res() res: Response
+  ): Promise<void> {
+    const result = await this.loginService.googleCallBack(code, state);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    if (result.isExistingUser) {
+      // CASE 1: Existing user (login success)
+      const redirectUrl = `${frontendUrl}/oauth/success` +
+        `?accessToken=${result.accessToken}` +
+        `&refreshToken=${result.refreshToken}`;
+      res.redirect(redirectUrl);
+    } else {
+      // CASE 2: New user (registration required)
+      const referralParam = result.referralCode ? `&referralCode=${encodeURIComponent(result.referralCode)}` : '';
+      const redirectUrl = `${frontendUrl}/signup` +
+        `?googleId=${result.googleId}` +
+        `&email=${encodeURIComponent(result.email || '')}` +
+        referralParam;
+      res.redirect(redirectUrl);
+    }
+  }
+}

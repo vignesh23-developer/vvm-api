@@ -1,0 +1,39 @@
+# Elasticsearch Configuration
+# Location: docker/elasticsearch/elasticsearch.yml
+
+cluster.name: "vvm-cluster"
+network.host: 0.0.0.0
+
+# Discovery settings for single-node
+discovery.type: single-node
+
+# Disable security for local development
+xpack.security.enabled: false
+xpack.security.enrollment.enabled: false
+xpack.security.http.ssl.enabled: false
+xpack.security.transport.ssl.enabled: false
+
+# Memory settings
+bootstrap.memory_lock: true
+
+# Index settings
+action.auto_create_index: true
+action.destructive_requires_name: true
+
+# Logging
+logger.level: info
+logger.org.elasticsearch.discovery: DEBUG
+
+# Path settings (inside container)
+path.data: /usr/share/elasticsearch/data
+path.logs: /usr/share/elasticsearch/logs
+
+# HTTP settings
+http.port: 9200
+http.cors.enabled: true
+http.cors.allow-origin: "*"
+http.cors.allow-methods: OPTIONS, HEAD, GET, POST, PUT, DELETE
+http.cors.allow-headers: "X-Requested-With, Content-Type, Content-Length, Authorization"
+
+# Indices settings
+indices.query.bool.max_clause_count: 4096

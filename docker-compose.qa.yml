@@ -1,0 +1,82 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vvm_api
+    restart: always
+    env_file:
+      - .env.qa
+    ports:
+      - "5000:5000"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - vvm_network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: vvm_elasticsearch
+    hostname: vvm-es
+    restart: always
+    environment:
+      - node.name=vvm-es
+      - cluster.name=vvm-cluster
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "127.0.0.1:9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - vvm_network
+
+  # kibana:
+  #  image: docker.elastic.co/kibana/kibana:8.11.0
+  #  container_name: vvm_kibana
+  #  restart: always
+  #  environment:
+  #    - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+  #  ports:
+  #    - "5601:5601"
+  #  depends_on:
+  #    elasticsearch:
+  #      condition: service_healthy
+  #  networks:
+  #    - vvm_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: vvm-redis-qa
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    networks:
+      - vvm_network
+
+
+volumes:
+  es_data:
+  redis_data:
+
+networks:
+  vvm_network:
+
