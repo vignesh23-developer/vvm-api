@@ -38,14 +38,6 @@ export class OtpService {
     userAgent?: string
   ): Promise<{ message: string }> {
     try {
-      const mobileNumber = [
-        '9884562624',
-        '9962401239',
-        '6592321646',
-        '8680089800',
-        '9876543210'
-      ];
-
       // Check rate limiting
       await this.checkRateLimit(phoneNumber, purpose);
 
@@ -53,9 +45,7 @@ export class OtpService {
       await this.invalidateExistingOtps(phoneNumber, purpose);
 
       // Generate 6-digit OTP
-      const code = mobileNumber.includes(phoneNumber)
-        ? '201319'
-        : this.generateOtpCode();
+      const code = this.generateOtpCode();
 
       // Calculate expiry time
       const expiresAt = new Date();
@@ -79,8 +69,7 @@ export class OtpService {
       await this.otpRepository.save(otp);
 
       // Send across all requested channels
-      if (!mobileNumber.includes(phoneNumber))
-        await this.sendOtp(phoneNumber, email, code, purpose, normalizedTypes);
+      await this.sendOtp(phoneNumber, email, code, purpose, normalizedTypes);
 
       return {
         message: `OTP sent successfully to ${phoneNumber}. Valid for ${this.OTP_EXPIRY_MINUTES} minutes.`
@@ -135,12 +124,9 @@ export class OtpService {
       // Increment attempt count
       await this.incrementAttemptCount(otp.id);
 
-      // Verify OTP code - allow hardcoded "111111" for development
-      const isValidCode =
-        otp.code === code ||
-        (code === '111111' &&
-          (process.env.NODE_ENV === 'development' ||
-            !process.env.SMS_GATEWAY_ENABLED));
+      //verify OTP code
+      const isValidCode = otp.code === code;
+
 
       if (!isValidCode) {
         throw new BadRequestException(
