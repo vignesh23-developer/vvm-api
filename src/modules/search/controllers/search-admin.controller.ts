@@ -7,24 +7,33 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
-  Post
+  Post,
+  UseGuards,
 } from '@nestjs/common';
+
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiResponse,
-  ApiTags
+  ApiTags,
 } from '@nestjs/swagger';
+
 import { PropertyIndexingService } from '../services/property-indexing.service';
 import { ElasticsearchService } from '../services/elasticsearch.service';
 import { AdIndexingService } from '../services/ad-indexing.service';
 import { AgentIndexingService } from '../services/agent-indexing.service';
 import { ElasticsearchIndexInitService } from '../services/elasticsearch-index-init.service';
 
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+
 @ApiTags('Search Admin')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
 @Controller('admin/search')
-@ApiBearerAuth()
 export class SearchAdminController {
   constructor(
     private readonly elasticsearchService: ElasticsearchService,
