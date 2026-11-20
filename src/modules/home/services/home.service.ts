@@ -66,6 +66,7 @@ export class HomeService {
       .leftJoinAndSelect('p.media', 'media')
       .leftJoinAndSelect('p.property_category', 'pc')
       .where('p.is_active = :active', { active: true })
+      .andWhere('p.admin_visibility = :visibility', { visibility: true })
       .andWhere('p.is_published = :published', { published: true })
       .andWhere('p.approval_status = :approved', { approved: 'APPROVED' })
       .orderBy('p.is_top_listing', 'DESC')
@@ -141,6 +142,7 @@ export class HomeService {
       .addSelect('MAX(p.price)', 'max_price')
       .addSelect('COUNT(DISTINCT p.agent_id)', 'no_of_agents')
       .where('p.is_active = :active', { active: true })
+      .andWhere('p.admin_visibility = :visibility', { visibility: true })
       .andWhere('p.approval_status = :approved', { approved: 'APPROVED' })
       .andWhere('p.is_published = :published', { published: true })
       .andWhere('p.district IS NOT NULL')
@@ -164,6 +166,7 @@ export class HomeService {
       .addSelect('pc.name', 'category_name')
       .innerJoin('p.property_category', 'pc')
       .where('p.is_active = :active', { active: true })
+      .andWhere('p.admin_visibility = :visibility', { visibility: true })
       .andWhere('p.approval_status = :approved', { approved: 'APPROVED' })
       .andWhere('p.is_published = :published', { published: true })
       .andWhere(`${normalizedDistrictExpr} IN (:...districtKeys)`, {
@@ -248,8 +251,8 @@ export class HomeService {
       .leftJoin(
         'pc.properties',
         'p',
-        'p.is_active = :active AND p.is_published = :published AND p.approval_status = :approved',
-        { active: true, published: true, approved: 'APPROVED' }
+        'p.is_active = :active AND p.admin_visibility = :visibility AND p.is_published = :published AND p.approval_status = :approved',
+        { active: true, visibility: true, published: true, approved: 'APPROVED' }
       )
       .select([
         'pc.id AS id',
@@ -296,6 +299,7 @@ export class HomeService {
           is_published: true,
           approval_status: 'APPROVED',
           is_active: true,
+          admin_visibility: true,
         },
       }),
 
@@ -305,6 +309,7 @@ export class HomeService {
           is_published: true,
           approval_status: 'APPROVED',
           is_active: true,
+          admin_visibility: true,
           is_verified: true,
         },
       }),
@@ -316,6 +321,7 @@ export class HomeService {
         .where('property.is_published = :published', { published: true })
         .andWhere('property.approval_status = :status', { status: 'APPROVED' })
         .andWhere('property.is_active = :active', { active: true })
+        .andWhere('property.admin_visibility = :visibility', { visibility: true })
         .getRawOne()
         .then((result) => parseInt(result?.count || '0', 10)),
 
@@ -327,6 +333,7 @@ export class HomeService {
         .andWhere('property.is_published = :published', { published: true })
         .andWhere('property.approval_status = :status', { status: 'APPROVED' })
         .andWhere('property.is_active = :active', { active: true })
+        .andWhere('property.admin_visibility = :visibility', { visibility: true })
         .select('COUNT(DISTINCT user.id)', 'count')
         .getRawOne()
         .then((result) => parseInt(result?.count || '0', 10)),
@@ -338,6 +345,7 @@ export class HomeService {
         .where('property.is_published = :published', { published: true })
         .andWhere('property.approval_status = :status', { status: 'APPROVED' })
         .andWhere('property.is_active = :active', { active: true })
+        .andWhere('property.admin_visibility = :visibility', { visibility: true })
         .andWhere('property.district IS NOT NULL')
         .andWhere("property.district != ''")
         .getRawOne()
