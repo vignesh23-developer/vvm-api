@@ -9,6 +9,7 @@ import { PropertyApproval } from './entities/property-approval.entity';
 import { PropertyMedia } from './entities/property-media.entity';
 import { PropertyFeatureValue } from './entities/property-feature-value.entity';
 import { PropertyController } from './properties/property.controller';
+import { AdminPropertyController } from './properties/admin-property.controller';
 import { PropertyService } from './properties/services/property.service';
 import { PropertyApprovalController } from './property-approval/property-approval.controller';
 import { PropertyApprovalService } from './property-approval/services/property-approval.service';
@@ -59,6 +60,7 @@ const services = [
   ],
   controllers: [
     PropertyController,
+    AdminPropertyController,
     PropertyApprovalController,
     PropertyReportController,
     PropertySearchController,

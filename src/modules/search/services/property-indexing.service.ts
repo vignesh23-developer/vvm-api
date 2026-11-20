@@ -37,6 +37,12 @@ export class PropertyIndexingService {
       return;
     }
 
+    if (property.admin_visibility === false) {
+      this.logger.warn(`Property is hidden, removing from index: ${propertyId}`);
+      await this.removeProperty(propertyId);
+      return;
+    }
+
     const document = await this.transformToEsDocument(property);
     await this.elasticsearchService.indexDocument(this.indexName, propertyId, document);
 
@@ -75,7 +81,7 @@ export class PropertyIndexingService {
 
     try {
       // Get total count
-      const total = await this.propertyRepository.count();
+      const total = await this.propertyRepository.count({ where: { admin_visibility: true } });
       this.logger.log(`Total properties to index: ${total}`);
 
       // Process in batches
@@ -169,6 +175,7 @@ export class PropertyIndexingService {
    */
   private async fetchPropertiesBatch(offset: number, limit: number): Promise<Property[]> {
     return this.propertyRepository.find({
+      where: { admin_visibility: true },
       relations: [
         'property_category',
         'property_category.parent',  // NEW: Include parent category

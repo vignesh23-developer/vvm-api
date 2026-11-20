@@ -205,6 +205,9 @@ export class Property {
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 
+  @Column({ type: 'boolean', default: true })
+  admin_visibility: boolean;
+
   // SEO
   @Column({ type: 'varchar', length: 255, nullable: true })
   slug: string;

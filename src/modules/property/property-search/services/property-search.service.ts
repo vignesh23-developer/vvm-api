@@ -17,6 +17,7 @@ export class PropertySearchService {
     filters: PropertyFilterDto
   ) {
     qb.where('p.is_active = :active', { active: true });
+    qb.andWhere('p.admin_visibility = :visibility', { visibility: true });
 
     if (filters.published ?? true) {
       qb.andWhere('p.is_published = :published', { published: true });
@@ -89,7 +90,7 @@ export class PropertySearchService {
       .where('(p.title ILIKE :q OR p.city ILIKE :q OR p.state ILIKE :q)', {
         q: `%${q}%`
       })
-      .andWhere('p.is_active = true AND p.is_published = true')
+      .andWhere('p.is_active = true AND p.is_published = true AND p.admin_visibility = true')
       .orderBy('p.view_count', 'DESC')
       .limit(10)
       .getMany();
@@ -123,7 +124,7 @@ export class PropertySearchService {
 
   async nearby(lat: number, lng: number, radiusKm = 5) {
     const candidates = await this.propertyRepo.find({
-      where: { is_active: true, is_published: true },
+      where: { is_active: true, is_published: true, admin_visibility: true },
       take: 200 // cap
     });
     const toRad = (d: number) => (d * Math.PI) / 180;
@@ -166,6 +167,7 @@ export class PropertySearchService {
       .where('p.is_active = :active', { active: true })
       .andWhere('p.approval_status = :approved', { approved: 'APPROVED' })
       .andWhere('p.is_published = :published', { published: true })
+      .andWhere('p.admin_visibility = :visibility', { visibility: true })
       .andWhere('p.district IS NOT NULL')
       .andWhere("TRIM(p.district) != ''")
       .groupBy(normalizedDistrictExpr)
@@ -189,6 +191,7 @@ export class PropertySearchService {
       .where('p.is_active = :active', { active: true })
       .andWhere('p.approval_status = :approved', { approved: 'APPROVED' })
       .andWhere('p.is_published = :published', { published: true })
+      .andWhere('p.admin_visibility = :visibility', { visibility: true })
       .andWhere('p.district IS NOT NULL')
       .andWhere("TRIM(p.district) != ''")
       .groupBy(normalizedDistrictExpr)

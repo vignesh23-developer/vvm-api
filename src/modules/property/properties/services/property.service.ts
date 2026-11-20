@@ -70,7 +70,11 @@ export class PropertyService {
     const whereConditions = this.buildWhereConditions(filters);
 
     if (!userRoles?.some((role) => String(role).toUpperCase() === UserType.ADMIN)) {
-      whereConditions.owner_id = userId;
+      if (userId) {
+        whereConditions.owner_id = userId;
+      } else {
+        whereConditions.admin_visibility = true;
+      }
     }
 
     const queryOptions = {
@@ -140,6 +144,7 @@ export class PropertyService {
     }
 
     const whereConditions = this.buildWhereConditions(filters);
+    whereConditions.admin_visibility = true;
     whereConditions.id = In(favoritePropertyIds);
 
     const queryOptions = {
@@ -165,6 +170,67 @@ export class PropertyService {
       total,
       page: limit > 0 ? page : 1,
       limit: limit > 0 ? limit : total
+    };
+  }
+
+  async adminListProperties(page = 1, limit = 20, search?: string, visibility?: string) {
+    page = Math.max(1, page);
+    limit = Math.min(100, Math.max(1, limit));
+
+    const qb = this.propertyRepo
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.media', 'media')
+      .leftJoinAndSelect('p.property_category', 'property_category')
+      .orderBy('p.created_at', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    if (search?.trim()) {
+      const term = `%${search.trim()}%`;
+      qb.andWhere(
+        '(p.title ILIKE :term OR p.city ILIKE :term OR p.district ILIKE :term OR CAST(p.id AS TEXT) ILIKE :term)',
+        { term }
+      );
+    }
+
+    if (visibility === 'true' || visibility === 'false') {
+      qb.andWhere('p.admin_visibility = :visibility', {
+        visibility: visibility === 'true'
+      });
+    }
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
+  }
+
+  async adminToggleVisibility(id: string, visibility: boolean) {
+    const property = await this.propertyRepo.findOne({ where: { id } });
+
+    if (!property) {
+      throw new NotFoundException('Property not found');
+    }
+
+    property.admin_visibility = visibility;
+    const savedProperty = await this.propertyRepo.save(property);
+
+    if (visibility) {
+      await this.propertyIndexingService.indexProperty(id);
+    } else {
+      await this.propertyIndexingService.removeProperty(id);
+    }
+
+    return {
+      message: visibility
+        ? 'Property enabled successfully'
+        : 'Property disabled successfully',
+      property: savedProperty
     };
   }
 
@@ -766,9 +832,7 @@ export class PropertyService {
   async getBoostedProperties(page = 1, limit = 10) {
     const [data, total] = await this.propertyRepo.findAndCount({
       where: {
-        is_active: true,
-        is_boosted: true,
-        is_published: true
+        is_active: true, is_boosted: true, is_published: true, admin_visibility: true
       },
       order: {
         boost_priority: 'DESC',
@@ -794,9 +858,7 @@ export class PropertyService {
   async getTopListings(page = 1, limit = 10) {
     const [data, total] = await this.propertyRepo.findAndCount({
       where: {
-        is_active: true,
-        is_top_listing: true,
-        is_published: true
+        is_active: true, is_top_listing: true, is_published: true, admin_visibility: true
       },
       order: {
         top_listing_expires_at: 'DESC',
@@ -824,7 +886,7 @@ export class PropertyService {
 
   async findAllEnhanced(page = 1, limit = 10) {
     const [data, total] = await this.propertyRepo.findAndCount({
-      where: { is_active: true, is_published: true },
+      where: { is_active: true, is_published: true, admin_visibility: true },
       order: {
         is_top_listing: 'DESC',
         is_boosted: 'DESC',

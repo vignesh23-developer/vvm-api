@@ -38,6 +38,7 @@ export class PropertyStatsService {
         property_category_id: property.property_category_id,
         city: property.city,
         is_active: true,
+        admin_visibility: true,
       },
       take: 10,
     });
@@ -72,7 +73,7 @@ export class PropertyStatsService {
     });
 
     const activeListings = await this.propertyRepository.count({
-      where: { owner_id: agentId, is_active: true, is_published: true },
+      where: { owner_id: agentId, is_active: true, is_published: true, admin_visibility: true },
     });
 
     // Get enquiries for agent's properties
@@ -139,7 +140,7 @@ export class PropertyStatsService {
   private async getAdminDashboardStats() {
     const totalProperties = await this.propertyRepository.count();
     const activeProperties = await this.propertyRepository.count({
-      where: { is_active: true, is_published: true },
+      where: { is_active: true, is_published: true, admin_visibility: true },
     });
     const totalEnquiries = await this.enquiryRepository.count();
     const totalFavorites = await this.favoriteRepository.count();
