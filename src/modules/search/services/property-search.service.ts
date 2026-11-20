@@ -80,6 +80,7 @@ export class PropertySearchService {
         { term: { approval_status: 'APPROVED' } },
         { term: { is_published: true } },
         { term: { is_active: true } },
+        { term: { admin_visibility: true } },
       ];
 
       if (dto.listing_type) {
@@ -784,6 +785,7 @@ export class PropertySearchService {
     filter.push({ term: { approval_status: 'APPROVED' } });
     filter.push({ term: { is_published: true } });
     filter.push({ term: { is_active: true } });
+    filter.push({ term: { admin_visibility: true } });
 
     // Text search with DISTRICT and CATEGORY priority
     if (dto.q) {

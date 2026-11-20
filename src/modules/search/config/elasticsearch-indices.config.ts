@@ -324,6 +324,7 @@ export const propertiesIndexConfig: IndexConfig = {
       is_premium: { type: 'boolean' },
       is_featured: { type: 'boolean' },
       is_active: { type: 'boolean' },
+      admin_visibility: { type: 'boolean' },
 
       // SEO
       slug: { type: 'keyword' },

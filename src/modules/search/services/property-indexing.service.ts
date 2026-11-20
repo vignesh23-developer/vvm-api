@@ -293,6 +293,7 @@ export class PropertyIndexingService {
       is_premium: property.is_premium || false,
       is_featured: property.is_featured || false,
       is_active: property.is_active !== false,
+      admin_visibility: property.admin_visibility !== false,
 
       // SEO
       slug: property.slug,
