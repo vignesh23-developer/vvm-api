@@ -70,10 +70,10 @@ export class PropertyService {
     const whereConditions = this.buildWhereConditions(filters);
 
     if (!userRoles?.some((role) => String(role).toUpperCase() === UserType.ADMIN)) {
+      whereConditions.admin_visibility = true;
+
       if (userId) {
         whereConditions.owner_id = userId;
-      } else {
-        whereConditions.admin_visibility = true;
       }
     }
 
