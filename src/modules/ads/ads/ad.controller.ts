@@ -26,15 +26,32 @@ import { UpdateAdDto } from './dto/update-ad.dto';
 import { AdResponseDto } from './dto/ad-response.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../auth';
+import { AdImageGenerationService } from './services/ad-image-generation.service';
 
 @ApiTags('ads')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
 @Controller('ads')
 export class AdController {
-  constructor(private readonly adService: AdService) {}
+  constructor(
+    private readonly adService: AdService,
+    private readonly adImageGenerationService: AdImageGenerationService,
+  ) { }
 
-  @Post()
+  @Post(':id/generate-image')
+  @ApiOperation({ summary: 'Generate AI image for an ad' })
+  @ApiParam({ name: 'id', description: 'Ad ID' })
+  async generateAdImage(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.adImageGenerationService.generate(
+      id,
+      user.id,
+      user.roles || [],
+    );
+  }
+
   @ApiOperation({ summary: 'Create a new ad' })
   @ApiResponse({
     status: 201,

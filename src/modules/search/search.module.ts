@@ -33,8 +33,8 @@ import { PropertyCategory } from '../master/entities/property-category.entity';
       },
       {
         name: 'medium',
-        ttl: 10000,   // 10 seconds
-        limit: 40,    // 30 requests per 10 seconds
+        ttl: 10000,
+        limit: 40,
       }
     ]),
     AuthModule

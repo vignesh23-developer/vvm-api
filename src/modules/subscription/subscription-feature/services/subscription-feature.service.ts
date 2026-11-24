@@ -6,6 +6,9 @@ import { SubscriptionPlanItem } from '../../entities/subscription-plan-item.enti
 import { SubscriptionItem } from '../../entities/subscription-item.entity';
 import { UserSubscriptionUsage } from '../../entities/user-subscription-usage.entity';
 import { UserPurchasedItem } from '../../entities/user-purchased-item.entity';
+import { User } from '../../../users/entities/user.entity';
+
+const FREE_TRIAL_DAYS = 50;
 
 @Injectable()
 export class SubscriptionFeatureService {
@@ -15,17 +18,61 @@ export class SubscriptionFeatureService {
     @InjectRepository(SubscriptionItem) private readonly itemRepo: Repository<SubscriptionItem>,
     @InjectRepository(UserSubscriptionUsage) private readonly usageRepo: Repository<UserSubscriptionUsage>,
     @InjectRepository(UserPurchasedItem) private readonly purchasedRepo: Repository<UserPurchasedItem>,
+    @InjectRepository(User) private readonly userRepo: Repository<User>,
   ) {}
+
+  private async isWithinFreeTrial(userId: string, now = new Date()): Promise<boolean> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: ['id', 'createdAt'],
+    });
+    if (!user?.createdAt) return false;
+    const trialEndsAt = new Date(user.createdAt.getTime() + FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    return now.getTime() < trialEndsAt.getTime();
+  }
+
+  async getAccessStatus(userId: string) {
+    const now = new Date();
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: ['id', 'createdAt'],
+    });
+    if (!user) return { accessMode: 'unknown', hasFullAccess: false, trialEndsAt: null };
+
+    const trialEndsAt = new Date(user.createdAt.getTime() + FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    const activeSubscription = await this.subRepo.findOne({
+      where: { user_id: userId, isActive: true, endDate: MoreThanOrEqual(now) },
+    });
+    if (activeSubscription) {
+      return {
+        accessMode: 'subscription',
+        hasFullAccess: true,
+        trialEndsAt,
+        subscriptionId: activeSubscription.id,
+        subscriptionEndsAt: activeSubscription.endDate,
+      };
+    }
+    if (now.getTime() < trialEndsAt.getTime()) {
+      return { accessMode: 'free_trial', hasFullAccess: true, trialEndsAt };
+    }
+    return { accessMode: 'subscription_required', hasFullAccess: false, trialEndsAt };
+  }
 
   async userHasFeatureAccess(userId: string, featureName: string) {
     const now = new Date();
     const sub = await this.subRepo.findOne({
       where: { user_id: userId, isActive: true, endDate: MoreThanOrEqual(now) },
     });
-    if (!sub) return false;
+
 
     const feature = await this.itemRepo.findOne({ where: { name: featureName, isActive: true } });
     if (!feature) return false;
+
+    // During the 50-day trial, ordinary features are available; paid add-ons/boosters are not.
+    if (!sub) {
+      const isBasicFeature = !feature.isAddon && feature.type === 'BASIC_FEATURE';
+      return isBasicFeature && await this.isWithinFreeTrial(userId, now);
+    }
 
     const planItem = await this.planItemRepo.findOne({
       where: { plan_id: sub.plan_id, item_id: feature.id, isIncluded: true },
@@ -55,20 +102,21 @@ export class SubscriptionFeatureService {
     return false;
   }
 
-  async recordFeatureUsage(
-    userId: string,
-    featureName: string,
-    usageCount = 1,
-    usageValue = 0,
-  ) {
+  async recordFeatureUsage(userId: string, featureName: string, usageCount = 1, usageValue = 0) {
     const now = new Date();
     const sub = await this.subRepo.findOne({
       where: { user_id: userId, isActive: true, endDate: MoreThanOrEqual(now) },
     });
-    if (!sub) return false;
+    
 
     const feature = await this.itemRepo.findOne({ where: { name: featureName, isActive: true } });
     if (!feature) return false;
+
+    // Trial is unrestricted; usage rows require a subscription foreign key, so none are created for trial users.
+    if (!sub) {
+      const isBasicFeature = !feature.isAddon && feature.type === 'BASIC_FEATURE';
+      return isBasicFeature && await this.isWithinFreeTrial(userId, now);
+    }
 
     let usage = await this.usageRepo.findOne({
       where: { user_subscription_id: sub.id, item_id: feature.id },

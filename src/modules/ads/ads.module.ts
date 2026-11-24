@@ -27,8 +27,12 @@ import { Enquiry } from '../user-interactions/entities/enquiry.entity';
 import { Favorite } from '../user-interactions/entities/favorite.entity';
 import { EntityView } from '../user-interactions/entities/entity-view.entity';
 
+
+import { AdImageGenerationService } from './ads/services/ad-image-generation.service';
+
 const services = [
   AdService,
+  AdImageGenerationService,
   AdImageService,
   AdApprovalService,
   AdReportService,
@@ -60,4 +64,4 @@ const services = [
   providers: services,
   exports: services
 })
-export class AdsModule {}
+export class AdsModule { }

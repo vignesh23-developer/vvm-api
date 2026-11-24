@@ -99,7 +99,7 @@ export class KycService {
   private readonly baseUrl: string;
 
   private readonly KYC_AMOUNT = 100;
-  private readonly KYC_CASHBACK_AMOUNT = 100;
+  private readonly KYC_CASHBACK_AMOUNT = 50
 
   constructor(
     @InjectRepository(KycVerification)
@@ -356,9 +356,9 @@ export class KycService {
       await this.kycRepo.save(kyc);
 
       // Add cashback immediately after creating new KYC record (only for new records)
-      if (entityType === KycEntityType.USER && kyc.userId) {
-        await this.addKYCCashbackAmount(kyc);
-      }
+      // if (entityType === KycEntityType.USER && kyc.userId) {
+      //   await this.addKYCCashbackAmount(kyc);
+      // }
     }
 
     // Attempt Surepass initialization
@@ -747,27 +747,27 @@ export class KycService {
     const { data } = response;
     const aadhaarData = data.aadhaar_xml_data;
 
-    // Store XML document to S3
+
     let xmlUrl: string | undefined;
     let xmlKey: string | undefined;
 
     if (data.xml_url) {
       try {
-        // Download XML from Surepass URL
+
         const xmlResponse = await axios.get(data.xml_url, {
           responseType: 'arraybuffer',
           timeout: 30000
         });
 
-        // Generate unique key for S3
+
         xmlKey = `kyc/aadhaar/${kyc.userId}/${kyc.id}.xml`;
 
-        // Upload to S3
+
         const s3Result = await this.s3Service.upload({
           key: xmlKey,
           body: Buffer.from(xmlResponse.data),
           contentType: 'application/xml',
-          acl: 'private', // Keep Aadhaar XML private
+          acl: 'private',
           metadata: {
             verificationId: kyc.id,
             userId: kyc.userId || '',
@@ -776,17 +776,19 @@ export class KycService {
         });
 
         xmlUrl = s3Result.url;
+
         this.logger.log(`Aadhaar XML stored: ${xmlKey}`);
       } catch (error) {
         this.logger.error('Failed to store Aadhaar XML to S3', error);
-        // Continue with verification even if S3 upload fails
+
       }
     }
 
-    // Update verification record
+    // Mark the KYC record as verified.
     kyc.status = KycStatus.VERIFIED;
     kyc.documentNumberMasked = aadhaarData.masked_aadhaar;
     kyc.verifiedName = aadhaarData.full_name;
+
     kyc.verifiedData = {
       dob: aadhaarData.dob,
       gender: aadhaarData.gender,
@@ -794,24 +796,37 @@ export class KycService {
       addressDetails: aadhaarData.address,
       fatherName: aadhaarData.father_name,
       careOf: aadhaarData.care_of,
-      // Don't store profile image in DB, keep only reference
+
       hasProfileImage: !!aadhaarData.profile_image,
       digilockerMetadata: data.digilocker_metadata
     };
-    if (xmlUrl) kyc.xmlDocumentUrl = xmlUrl;
-    if (xmlKey) kyc.xmlDocumentKey = xmlKey;
+
+    if (xmlUrl) {
+      kyc.xmlDocumentUrl = xmlUrl;
+    }
+
+    if (xmlKey) {
+      kyc.xmlDocumentKey = xmlKey;
+    }
+
     kyc.rawDownloadResponse = response;
     kyc.completedAt = new Date();
 
     await this.kycRepo.save(kyc);
 
-    // Update user if this is a USER entity type
-    if (kyc.entityType === KycEntityType.USER && kyc.userId) {
+    // Update the user and award cashback only for successful user Aadhaar KYC.
+    if (
+      kyc.entityType === KycEntityType.USER &&
+      kyc.verificationType === VerificationType.AADHAAR &&
+      kyc.userId
+    ) {
       await this.userRepo.update(kyc.userId, {
         isKycVerified: true,
         kycVerifiedAt: new Date(),
         aadhaarNumberMasked: aadhaarData.masked_aadhaar
       });
+
+      await this.addKYCCashbackAmount(kyc);
     }
 
     this.logger.log(
@@ -819,106 +834,94 @@ export class KycService {
     );
   }
 
-  private async addKYCCashbackAmount(kyc: KycVerification) {
-    console.log('[KYC Cashback] Starting cashback process for user:', kyc.userId);
-    console.log('[KYC Cashback] KYC ID:', kyc.id);
-    console.log('[KYC Cashback] Cashback amount:', this.KYC_CASHBACK_AMOUNT);
+  private async addKYCCashbackAmount(
+    kyc: KycVerification
+  ): Promise<void> {
+    if (
+      !kyc.userId ||
+      kyc.entityType !== KycEntityType.USER ||
+      kyc.verificationType !== VerificationType.AADHAAR ||
+      kyc.status !== KycStatus.VERIFIED
+    ) {
+      return;
+    }
 
     try {
-      console.log('[KYC Cashback] Step 1: Finding wallet for user:', kyc.userId);
-      let wallet = await this.userWalletService.findOneByUserId(kyc.userId);
-      console.log('[KYC Cashback] Step 1 Result - Wallet found:', wallet ? 'YES' : 'NO');
-      console.log('[KYC Cashback] Step 1 Result - Wallet data:', JSON.stringify(wallet, null, 2));
+      let wallet = await this.userWalletService.findOneByUserId(
+        kyc.userId
+      );
 
-      // Create wallet if it doesn't exist
+
       if (!wallet) {
-        console.log('[KYC Cashback] Step 2: Creating new wallet for user:', kyc.userId);
-        await this.userWalletService.create({ user_id: kyc.userId });
-        this.logger.log(`User wallet created for user ${kyc.userId}`);
-        console.log('[KYC Cashback] Step 2: Wallet created successfully');
-        
-        console.log('[KYC Cashback] Step 3: Fetching newly created wallet');
-        wallet = await this.userWalletService.findOneByUserId(kyc.userId);
-        console.log('[KYC Cashback] Step 3 Result - New wallet data:', JSON.stringify(wallet, null, 2));
-      } else {
-        console.log('[KYC Cashback] Step 2: Wallet already exists, skipping creation');
+        await this.userWalletService.create({
+          user_id: kyc.userId
+        });
+
+        wallet = await this.userWalletService.findOneByUserId(
+          kyc.userId
+        );
       }
 
-      // Log current balance before increment
-      console.log('[KYC Cashback] Step 4: Current wallet balance');
-      console.log('[KYC Cashback] Step 4 - Raw balance value:', wallet.balance);
-      console.log('[KYC Cashback] Step 4 - Balance type:', typeof wallet.balance);
+      if (!wallet) {
+        throw new Error(
+          `Wallet not found for user ${kyc.userId}`
+        );
+      }
 
-      // Update wallet balance and get updated wallet (incrementBalance handles the addition)
-      console.log('[KYC Cashback] Step 5: Incrementing wallet balance');
-      console.log('[KYC Cashback] Step 5 - User ID:', kyc.userId);
-      console.log('[KYC Cashback] Step 5 - Amount to add:', this.KYC_CASHBACK_AMOUNT);
-      
-      const updatedWallet = await this.userWalletService.incrementBalance(
-        kyc.userId,
-        this.KYC_CASHBACK_AMOUNT
+      // Check whether this wallet already received the Aadhaar bonus.
+      const existingTransactions =
+        await this.walletTransactionsService.findByWalletId(
+          wallet.id,
+          {
+            type: 'CREDIT',
+            status: 'COMPLETED'
+          }
+        );
+
+      const alreadyCredited = existingTransactions.some(
+        (transaction) =>
+          transaction.source === 'AADHAAR_VERIFICATION'
       );
 
-      console.log('[KYC Cashback] Step 5 Result - Increment completed');
-      console.log('[KYC Cashback] Step 5 Result - Updated wallet data:', JSON.stringify(updatedWallet, null, 2));
-      console.log('[KYC Cashback] Step 5 Result - Updated balance value:', updatedWallet.balance);
-      console.log('[KYC Cashback] Step 5 Result - Updated balance type:', typeof updatedWallet.balance);
+      if (alreadyCredited) {
+        this.logger.log(
+          `Aadhaar bonus already credited to user ${kyc.userId}; skipping.`
+        );
+        return;
+      }
 
-      // Get the actual balance after increment (incrementBalance already did the calculation)
-      console.log('[KYC Cashback] Step 6: Getting final balance from updated wallet');
-      const balanceAfter = Number(updatedWallet.balance) || 0;
-      console.log('[KYC Cashback] Step 6 Result - Balance after:', balanceAfter);
-
-      // Create transaction record
-      console.log('[KYC Cashback] Step 7: Creating wallet transaction record');
-      console.log('[KYC Cashback] Step 7 - Transaction data:', {
-        user_wallet_id: wallet.id,
-        amount: this.KYC_CASHBACK_AMOUNT,
-        balance_after: balanceAfter,
-        source: 'AADHAAR_VERIFICATION',
-        reference_type: 'KYC_VERIFICATION',
-        reference_id: kyc.id,
-        description: 'Paid for KYC verification and added this to cashback'
-      });
-
-      const transaction = await this.walletTransactionsService.createCredit({
-        user_wallet_id: wallet.id,
-        amount: this.KYC_CASHBACK_AMOUNT,
-        balance_after: balanceAfter,
-        source: 'AADHAAR_VERIFICATION',
-        reference_type: 'KYC_VERIFICATION',
-        reference_id: kyc.id,
-        description: 'Paid for KYC verification and added this to cashback'
-      });
-
-      console.log('[KYC Cashback] Step 7 Result - Transaction created:', JSON.stringify(transaction, null, 2));
-
-      console.log('[KYC Cashback] Step 8: Cashback process completed successfully');
-      // Get previous balance for summary (from original wallet)
       const previousBalance = Number(wallet.balance) || 0;
-      
-      console.log('[KYC Cashback] Final Summary:', {
-        userId: kyc.userId,
-        kycId: kyc.id,
-        cashbackAmount: this.KYC_CASHBACK_AMOUNT,
-        previousBalance: previousBalance,
-        newBalance: balanceAfter,
-        transactionId: transaction?.id || 'N/A'
-      });
+
+      const updatedWallet =
+        await this.userWalletService.incrementBalance(
+          kyc.userId,
+          this.KYC_CASHBACK_AMOUNT
+        );
+      const balanceAfter = Number(updatedWallet.balance) || 0;
+      const transaction =
+        await this.walletTransactionsService.createCredit({
+          user_wallet_id: wallet.id,
+          amount: this.KYC_CASHBACK_AMOUNT,
+          balance_after: balanceAfter,
+          source: 'AADHAAR_VERIFICATION',
+          reference_type: 'KYC_VERIFICATION',
+          reference_id: kyc.id,
+          description: 'Bonus for successful Aadhaar verification'
+        });
 
       this.logger.log(
-        `KYC cashback ₹${this.KYC_CASHBACK_AMOUNT} credited to user ${kyc.userId}. New balance: ₹${balanceAfter}`
+        `Aadhaar bonus credited to user ${kyc.userId}. ` +
+        `Amount: ₹${this.KYC_CASHBACK_AMOUNT}. ` +
+        `Previous balance: ₹${previousBalance}. ` +
+        `New balance: ₹${balanceAfter}. ` +
+        `Transaction: ${transaction.id}`
       );
     } catch (error) {
-      console.error('[KYC Cashback] ERROR - Failed to credit cashback');
-      console.error('[KYC Cashback] ERROR - User ID:', kyc.userId);
-      console.error('[KYC Cashback] ERROR - KYC ID:', kyc.id);
-      console.error('[KYC Cashback] ERROR - Error details:', error);
-      console.error('[KYC Cashback] ERROR - Error stack:', error?.stack);
-      
+
+
       this.logger.error(
-        `Failed to credit KYC cashback for user ${kyc.userId}`,
-        error
+        `Failed to credit Aadhaar bonus for user ${kyc.userId}`,
+        error instanceof Error ? error.stack : String(error)
       );
     }
   }

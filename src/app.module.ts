@@ -70,7 +70,10 @@ import { NewsletterModule } from './modules/newsletter/newsletter.module';
         REDIS_PASSWORD: Joi.string().optional().allow(''),
 
         // CORS
-        CORS_ORIGINS: Joi.string().optional()
+        CORS_ORIGINS: Joi.string().optional(),
+
+        // OpenAI
+        OPENAI_API_KEY: Joi.string().optional().allow(''),
       })
     }),
     LoggerModule.forRoot({

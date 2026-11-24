@@ -7,7 +7,7 @@ import * as crypto from 'crypto';
 
 @Injectable()
 export class RazorpayService {
-  private razorpay: Razorpay;
+  private razorpay!: Razorpay;
   private razorpayKey: string;
   private razorpaySecret: string;
   private razorpayWebhookSecret: string;

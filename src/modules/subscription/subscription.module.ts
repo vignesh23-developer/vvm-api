@@ -7,6 +7,7 @@ import { SubscriptionPlanItem } from './entities/subscription-plan-item.entity';
 import { UserSubscription } from './entities/user-subscription.entity';
 import { UserSubscriptionUsage } from './entities/user-subscription-usage.entity';
 import { UserPurchasedItem } from './entities/user-purchased-item.entity';
+import { User } from '../users/entities/user.entity';
 
 import { SubscriptionItemController } from './subscription-item/subscription-item.controller';
 import { SubscriptionPlanController } from './subscription-plan/subscription-plan.controller';
@@ -36,6 +37,7 @@ import { KycModule } from '../kyc/kyc.module';
       UserSubscription,
       UserSubscriptionUsage,
       UserPurchasedItem,
+      User,
     ]),
     PaymentModule, // Import PaymentModule to access PaymentOrdersService and PaymentTransactionsService
     forwardRef(() => KycModule), // Import KycModule to access KycService (forwardRef to avoid circular dependency)
