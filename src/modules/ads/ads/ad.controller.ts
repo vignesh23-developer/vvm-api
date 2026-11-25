@@ -52,6 +52,7 @@ export class AdController {
     );
   }
 
+  @Post()
   @ApiOperation({ summary: 'Create a new ad' })
   @ApiResponse({
     status: 201,
